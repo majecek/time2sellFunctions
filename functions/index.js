@@ -8,14 +8,12 @@
 
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
-const _  = require('lodash');
-var googleStocks = require('google-stocks');
-// const axios = require('axios');
+const _ = require('lodash');
+const googleStocks = require('google-stocks');
+
 
 admin.initializeApp(functions.config().firebase);
-
-// Take the text parameter passed to this HTTP endpoint and insert it into the
-// Realtime Database under the path /messages/:pushId/original
+const db = admin.database();
 
 function convertToArray(objGroup) {
   const newArray = []
@@ -29,77 +27,71 @@ function convertToArray(objGroup) {
   return newArray
 }
 
+
 exports.updateStocks = functions.https.onRequest((req, res) => {
-  const axios = require('axios');
 
-  const time1 =Date.now();
-  console.log('timestamp',time1);
 
-  // var response = UrlFetchApp.fetch('https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20yahoo.finance.quotes%20where%20symbol%20in%20(%22YHOO%22)&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback=');
-// console.log('urlfetch:', response.getContentText());
+  db.ref('users').on('value', snapUser => {
+    _.keys(snapUser.val()).forEach(userKey => {
+      // let stockArray = [];
+console.log('===>USER:', userKey);
+        db.ref('users').child(`${userKey}/stocks`).on('value', snapStocks => {
 
-  axios.get('https://query.yahooapis.com/v1/public/yql?q=select%20*%20from%20yahoo.finance.quotes%20where%20symbol%20in%20(%22YHOO%22)&format=json&env=store%3A%2F%2Fdatatables.org%2Falltableswithkeys&callback=')
-    .then(res => {
-      console.log('axios', JSON.parse(res.data))
-      console.log('axios2', JSON.parse(res.data.substring(3))[0].l)
-      JSON.parse(res.data.substring(3)).forEach(st => {
-        console.log(st.t, st.l)
-      })
+         const stockArray = convertToArray(snapStocks.val());
+console.log('stockArray1',userKey, stockArray);
+          const stocksSymbols = stockArray.map(stock => { return stock.symbol });
+console.log('stocksSymbols',userKey, stocksSymbols);
+          // const updatedStocks = getUpdatedPrices(stocksSymbols);
+
+
+
+          googleStocks([stocksSymbols])
+            .then(function (data) {
+              // console.log('google updated price:', stocksSymbols, data);
+
+              let result = {};
+              stockArray.map(stock => {
+                const updatedStockObj = data.filter(updatedStock => {
+                  return updatedStock.t === stock.symbol
+                });
+      console.log('updatedStockObj',userKey, JSON.stringify(updatedStockObj));
+                stock.lastPrice = updatedStockObj[0] ? updatedStockObj[0].l : 0;
+                result[`stocks/${stock.id}/lastPriceTimeStamp`] = Date.now();
+                result[`stocks/${stock.id}/lastPrice`] = stock.lastPrice;
+              })
+      // console.log('stockArray2', stockArray);
+
+
+
+              // stockArray.map(stock => {
+              //           result[`stocks/${stock.id}/lastPriceTimeStamp`] = Date.now();
+              //   return  result[`stocks/${stock.id}/lastPrice`] = stock.lastPrice;
+              // });
+
+      // console.log('result:', result);
+              db.ref(`users/${userKey}`).update(result);
+console.log('stocks updated', userKey, result);
+            })
+
+            .catch(function (error) {
+              console.log('google-error', error);
+
+              // // let result = {};
+              //
+              // stockArray.map(stock => {
+              //   result[`stocks/${stock.id}/errorTimeStamp`] = Date.now();
+              //   return  result[`stocks/${stock.id}/error`] = error;
+              // });
+              //
+              // db.ref(`users/${userKey}`).update(result);
+            });
+      //TODO I should put update here - out of google functions
+        });
+console.log('===>USER-END:', userKey);
+
     });
 
-  // let stockArray = [];
-  // admin.database().ref(`users/109037309929453943367`).on('value', snapshot => {
-  //   // console.log('snapshot', snapshot.val().stocks);
-  //   stockArray = convertToArray(snapshot.val().stocks);
-  //   console.log('stockArray', stockArray);
-  //
-  //
-  //
-  //   // stockArray.forEach(stock => {
-  //   //   console.log('google-prep',stock);
-  //   //   console.log('google-prep1',stock.symbol);
-  //   //
-  //   //
-  //   //   googleStocks([stock.symbol])
-  //   //     .then(function(data) {
-  //   //       console.log('google',stock.symbol,data.l);
-  //   //       /* do something with data */
-  //   //     })
-  //   //     .catch(function(error) {
-  //   //       console.log('google-error', error);
-  //   //     });
-  //   // })
-  //   console.log('timestamp3',Date.now() - time1);
-  //
-  // });
-
-  console.log('timestamp2',Date.now() - time1);
-
-  // googleStocks(['AAPL'], function(error, data) {
-  //   console.log(data);
-  // });
-
-  // googleStocks(['AAPL'])
-  //   .then(data => {
-  //     console.log('google-stock', JSON.stringify(data))
-  //     /* do something with data */
-  //   })
-  //   .catch(error => {
-  //     /* error logic */
-  //   });
-  // console.log('stockArray', stockArray);
-
-  // stockArray.map(stock => {
-  //   console.log('google-prep',stock);
-  //   googleStocks([stock.symbol])
-  //     .then(function(data) {
-  //       console.log('google',stock.symbol,data.l);
-  //       /* do something with data */
-  //     })
-  //     .catch(function(error) {
-  //       console.log('google-error', error);
-  //     });
-  // })
+  });
 
   // Grab the text parameter.
   // const original = req.query.text;
