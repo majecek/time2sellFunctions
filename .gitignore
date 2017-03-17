@@ -111,4 +111,5 @@ fabric.properties
 .idea/sonarlint/
 .idea/time2sellFunctions.iml
 .idea/workspace.xml
+.idea/vcs.xml
 firebase.json
