@@ -1,11 +1,3 @@
-// // Start writing Firebase Functions
-// // https://firebase.google.com/preview/functions/write-firebase-functions
-//
-// exports.helloWorld = functions.https.onRequest((request, response) => {
-//  response.send("Hello from Firebase!");
-// })
-
-
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const _ = require('lodash');
@@ -27,81 +19,69 @@ function convertToArray(objGroup) {
   return newArray
 }
 
+function preparePricesForDB(stocksFromDB, googlePrices, userKey) {
+  let result = {}
+  stocksFromDB.map(stock => {
+    const updatedStockFromGoogle = googlePrices.filter(googlePrice => {
+      return googlePrice.t === stock.symbol
+    });
+console.log('Prices from Google', userKey, JSON.stringify(updatedStockFromGoogle));
+    const lastPrice = updatedStockFromGoogle[0] ? updatedStockFromGoogle[0].l : 1;
+    const highestPrice = stock.lastPrice > stock.highestPrice ? stock.lastPrice : stock.highestPrice;
+    const gain =  _.round(((100 * stock.lastPrice ) / stock.purchasePrice) - 100, 2)
+    const currentTreshold = _.round(((1 - (stock.lastPrice / highestPrice)) * 100),2)
+console.log(userKey,'highestPrice', highestPrice, 'lastPrice', lastPrice, 'gain', gain, 'currentTreshold', currentTreshold)
+    result[`stocks/${stock.id}/lastPriceTimeStamp`] = new Date().toISOString();
+    result[`stocks/${stock.id}/lastPrice`] = lastPrice;
+    result[`stocks/${stock.id}/highestPrice`] = highestPrice
+    result[`stocks/${stock.id}/gain`] = gain
+    result[`stocks/${stock.id}/currentTreshold`] = currentTreshold
+  })
+  return result;
+}
+
+function getPricesFromGoogle(snapStocks, userKey) {
+
+  const stocksFromDB = convertToArray(snapStocks.val());
+  const stocksSymbols = stocksFromDB.map(stock => {
+    return stock.symbol
+  });
+  // console.log('stocksArray', userKey, stocksFromDB);
+  console.log('stocksSymbols', userKey, stocksSymbols);
+
+  googleStocks([stocksSymbols])
+    .then(function (data) {
+      const result = preparePricesForDB(stocksFromDB, data, userKey)
+      db.ref(`users/${userKey}`).update(result);
+      console.log('stocks updated', userKey, result);
+    })
+    .catch(function (error) {
+      console.error('google-error', userKey, stocksSymbols, error);
+      // if (error.code !== 'ECONNRESET') {
+        db.ref(`users/${userKey}/errors`).push().set({
+          error,
+          errorTimeStamp: new Date().toISOString()
+        });
+      // }
+
+    });
+}
+
 
 exports.updateStocks = functions.https.onRequest((req, res) => {
 
-
-  db.ref('users').on('value', snapUser => {
+  db.ref('users').once('value', snapUser => {
     _.keys(snapUser.val()).forEach(userKey => {
-      // let stockArray = [];
-console.log('===>USER:', userKey);
-        db.ref('users').child(`${userKey}/stocks`).on('value', snapStocks => {
 
-         const stockArray = convertToArray(snapStocks.val());
-console.log('stockArray1',userKey, stockArray);
-          const stocksSymbols = stockArray.map(stock => { return stock.symbol });
-console.log('stocksSymbols',userKey, stocksSymbols);
-          // const updatedStocks = getUpdatedPrices(stocksSymbols);
-
-
-
-          googleStocks([stocksSymbols])
-            .then(function (data) {
-              // console.log('google updated price:', stocksSymbols, data);
-
-              let result = {};
-              stockArray.map(stock => {
-                const updatedStockObj = data.filter(updatedStock => {
-                  return updatedStock.t === stock.symbol
-                });
-      console.log('updatedStockObj',userKey, JSON.stringify(updatedStockObj));
-                stock.lastPrice = updatedStockObj[0] ? updatedStockObj[0].l : 0;
-                result[`stocks/${stock.id}/lastPriceTimeStamp`] = Date.now();
-                result[`stocks/${stock.id}/lastPrice`] = stock.lastPrice;
-              })
-      // console.log('stockArray2', stockArray);
-
-
-
-              // stockArray.map(stock => {
-              //           result[`stocks/${stock.id}/lastPriceTimeStamp`] = Date.now();
-              //   return  result[`stocks/${stock.id}/lastPrice`] = stock.lastPrice;
-              // });
-
-      // console.log('result:', result);
-              db.ref(`users/${userKey}`).update(result);
-console.log('stocks updated', userKey, result);
-            })
-
-            .catch(function (error) {
-              console.log('google-error', error);
-
-              // // let result = {};
-              //
-              // stockArray.map(stock => {
-              //   result[`stocks/${stock.id}/errorTimeStamp`] = Date.now();
-              //   return  result[`stocks/${stock.id}/error`] = error;
-              // });
-              //
-              // db.ref(`users/${userKey}`).update(result);
-            });
-      //TODO I should put update here - out of google functions
-        });
-console.log('===>USER-END:', userKey);
+      // console.log('===>USER:', userKey);
+      db.ref('users').child(`${userKey}/stocks`).once('value', snapStocks => {
+        getPricesFromGoogle(snapStocks, userKey);
+      });
+      // console.log('===>USER-END:', userKey);
 
     });
-
   });
 
-  // Grab the text parameter.
-  // const original = req.query.text;
-  // // Push it into the Realtime Database then send a response
-  // admin.database().ref('/messages')
-  //   .push({original: original})
-  //   .then(snapshot => {
-  //     // Redirect with 303 SEE OTHER to the URL of the pushed object in the Firebase console.
-  //     res.redirect(303, snapshot.ref);
-  //   });
   res.send("Hello from Firebase!");
 });
 
