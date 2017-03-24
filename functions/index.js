@@ -49,12 +49,12 @@ function preparePricesForDB (stocksFromDB, googlePrices, userKey, userEmail) {
     const updatedStockFromGoogle = googlePrices.filter(googlePrice => {
       return googlePrice.t === stock.symbol
     })
-    console.log('Prices from Google', userKey, JSON.stringify(updatedStockFromGoogle))
+    // console.log('Prices from Google', userKey, JSON.stringify(updatedStockFromGoogle))
     const lastPrice = updatedStockFromGoogle[0] ? updatedStockFromGoogle[0].l : 1
     const highestPrice = stock.lastPrice > stock.highestPrice ? stock.lastPrice : stock.highestPrice
     const gain = _.round(((100 * lastPrice ) / stock.purchasePrice) - 100, 2)
     const currentTreshold = _.round(((1 - (lastPrice / highestPrice)) * 100), 2)
-    console.log(userKey, 'highestPrice', highestPrice, 'lastPrice', lastPrice, 'gain', gain, 'currentTreshold', currentTreshold)
+    // console.log(userKey, 'highestPrice', highestPrice, 'lastPrice', lastPrice, 'gain', gain, 'currentTreshold', currentTreshold)
     result[`stocks/${stock.id}/lastPriceTimeStamp`] = new Date().toISOString()
     result[`stocks/${stock.id}/lastPrice`] = lastPrice
     result[`stocks/${stock.id}/highestPrice`] = highestPrice
@@ -81,12 +81,10 @@ function sendEmail (email, stock, gain, highestPrice, lastPrice) {
     highest price: ${highestPrice} - current price: ${lastPrice}
     current P&L: ${gain}
     
-    regards, time2sell
-    `
+    best regards, 
+    time2sell `
   }
-    return mailTransport.sendMail(mailOptions).then(() => {
-      console.log('New subscription confirmation email sent to:', email)
-    })
+  return mailTransport.sendMail(mailOptions).then(() => console.log('email sent to', email))
 }
 
 function getPricesFromGoogle (snapStocks, userKey, userEmail) {
@@ -115,17 +113,3 @@ function getPricesFromGoogle (snapStocks, userKey, userEmail) {
 
     })
 }
-
-// Listens for new messages added to /messages/:pushId/original and creates an
-// uppercase version of the message to /messages/:pushId/uppercase
-// exports.makeUppercase = functions.database.ref('/messages/{pushId}/original')
-//   .onWrite(event => {
-//     // Grab the current value of what was written to the Realtime Database.
-//     const original = event.data.val();
-//     console.log('Uppercasing', event.params.pushId, original);
-//     const uppercase = original.toUpperCase();
-// // You must return a Promise when performing asynchronous tasks inside a Functions such as
-// // writing to the Firebase Realtime Database.
-// // Setting an "uppercase" sibling in the Realtime Database returns a Promise.
-//     return event.data.ref.parent.child('uppercase').set(uppercase);
-//   });
